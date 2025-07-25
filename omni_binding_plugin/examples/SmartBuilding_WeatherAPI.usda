@@ -1,0 +1,249 @@
+#usda 1.0
+(
+    defaultPrim = "SmartBuilding"
+    doc = """Smart Building with Weather API Integration Example
+    
+    This example demonstrates how to use the USD Binding Protocol Extension
+    with real-world authentication configurations for weather APIs.
+    """
+)
+
+def Scope "SmartBuilding" (
+    prepend apiSchemas = ["BindingAPI"]
+    doc = "Smart building management system with external data integration"
+)
+{
+    # Global context variables
+    dictionary binding:context = {
+        "buildingId": "smart-office-001",
+        "location": "seattle",
+        "weatherApiBase": "https://api.weather.com/v1",
+        "facilityApiBase": "https://api.buildingmgmt.com/v2"
+    }
+
+    # Authentication defaults for different protocols
+    dictionary binding:authDefaults:rest = {
+        "authMethod": "oauth2",
+        "authProfile": "weather-api-prod"
+    }
+
+    dictionary binding:authDefaults:mqtt = {
+        "authMethod": "mtls",
+        "authProfile": "mqtt-production"
+    }
+
+    dictionary binding:authDefaults:sql = {
+        "authMethod": "oauth2",
+        "authProfile": "azure-fabric-prod"
+    }
+
+    # Weather monitoring system
+    def Scope "WeatherStation" (
+        prepend apiSchemas = ["BindingAPI"]
+    )
+    {
+        dictionary binding:context = {
+            "stationId": "roof-sensor-01"
+        }
+
+        # Current temperature from weather API
+        double outsideTemperature = 20.0 (
+            doc = "Current outside temperature in Celsius"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "read"
+            custom string binding:uri = "${weatherApiBase}/current"
+            custom token binding:method = "GET"
+            custom string binding:jsonPath = "$.current.temp_c"
+            custom string binding:refreshPolicy = "interval:300s"
+            # Auth inherited from authDefaults:rest (weather-api-prod)
+        )
+
+        # Current humidity from weather API
+        double outsideHumidity = 50.0 (
+            doc = "Current outside humidity percentage"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "read"
+            custom string binding:uri = "${weatherApiBase}/current"
+            custom token binding:method = "GET"
+            custom string binding:jsonPath = "$.current.humidity"
+            custom string binding:refreshPolicy = "interval:300s"
+            # Auth inherited from authDefaults:rest
+        )
+
+        # Weather conditions string
+        string weatherCondition = "clear" (
+            doc = "Current weather condition description"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "read"
+            custom string binding:uri = "${weatherApiBase}/current"
+            custom token binding:method = "GET"
+            custom string binding:jsonPath = "$.current.condition.text"
+            custom string binding:refreshPolicy = "interval:600s"
+            # Using development API key instead of OAuth2
+            custom token binding:authMethod = "apikey"
+            custom string binding:authProfile = "weather-api-dev"
+        )
+
+        # 24-hour forecast data
+        string forecastData = "" (
+            doc = "24-hour weather forecast JSON data"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "read"
+            custom string binding:uri = "${weatherApiBase}/forecast?days=1"
+            custom token binding:method = "GET"
+            custom string binding:refreshPolicy = "interval:3600s"
+            # Auth inherited from authDefaults:rest
+        )
+    }
+
+    # HVAC control system
+    def Scope "HVACSystem" (
+        prepend apiSchemas = ["BindingAPI"]
+    )
+    {
+        dictionary binding:context = {
+            "hvacZone": "main-floor",
+            "systemId": "hvac-unit-01"
+        }
+
+        # Temperature setpoint from building management API
+        double temperatureSetpoint = 22.0 (
+            doc = "HVAC temperature setpoint in Celsius"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "read"
+            custom string binding:uri = "${facilityApiBase}/hvac/${systemId}/setpoint"
+            custom token binding:method = "GET"
+            custom string binding:jsonPath = "$.temperature"
+            custom string binding:refreshPolicy = "interval:60s"
+            custom token binding:authMethod = "oauth2"
+            custom string binding:authProfile = "building-mgmt-api"
+        )
+
+        # Real-time temperature sensors via MQTT
+        double currentTemperature = 21.5 (
+            doc = "Current temperature from HVAC sensors"
+            custom token binding:protocol = "mqtt"
+            custom token binding:operation = "stream"
+            custom string binding:uri = "mqtts://iot.smartbuilding.com:8883"
+            custom string binding:topic = "/building/${buildingId}/hvac/${systemId}/temperature"
+            # Auth inherited from authDefaults:mqtt (mqtt-production with mTLS)
+        )
+
+        # HVAC system status via MQTT
+        string systemStatus = "idle" (
+            doc = "Current HVAC system status"
+            custom token binding:protocol = "mqtt"
+            custom token binding:operation = "stream"
+            custom string binding:uri = "mqtts://iot.smartbuilding.com:8883"
+            custom string binding:topic = "/building/${buildingId}/hvac/${systemId}/status"
+            # Auth inherited from authDefaults:mqtt
+        )
+
+        # Energy consumption from time-series database
+        double energyConsumption = 0.0 (
+            doc = "Current energy consumption in kW"
+            custom token binding:protocol = "sql"
+            custom token binding:operation = "read"
+            custom string binding:uri = "sql://warehouse.database.com"
+            custom string binding:query = "SELECT TOP 1 consumption_kw FROM energy_data WHERE device_id = 'hvac-unit-01' ORDER BY timestamp DESC"
+            custom string binding:refreshPolicy = "interval:300s"
+            # Uses SQL connection string from azure-fabric-prod auth profile
+        )
+    }
+
+    # Lighting control system
+    def Scope "LightingSystem"
+    {
+        # Occupancy sensor data via IoT platform API
+        bool occupancyDetected = false (
+            doc = "Room occupancy status from sensors"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "stream"
+            custom string binding:uri = "https://api.iotplatform.com/v2/devices/occupancy-sensor-01/latest"
+            custom token binding:method = "GET"
+            custom string binding:jsonPath = "$.occupied"
+            custom string binding:refreshPolicy = "interval:30s"
+            custom token binding:authMethod = "apikey"
+            custom string binding:authProfile = "iot-platform"
+        )
+
+        # Light level setpoints from config file
+        double lightLevel = 80.0 (
+            doc = "Current light level percentage"
+            custom token binding:protocol = "file"
+            custom token binding:operation = "stream"
+            custom string binding:uri = "file://./config/lighting-config.json"
+            custom string binding:jsonPath = "$.defaultLevel"
+            custom string binding:refreshPolicy = "interval:60s"
+        )
+    }
+
+    # Analytics and reporting
+    def Scope "Analytics" (
+        prepend apiSchemas = ["BindingAPI"]
+    )
+    {
+        # Historical weather correlation data
+        string weatherTrends = "" (
+            doc = "Historical weather trends for energy optimization"
+            custom token binding:protocol = "sql"
+            custom token binding:operation = "read"
+            custom string binding:uri = "sql://analytics-warehouse"
+            custom string binding:query = """
+                SELECT 
+                    AVG(outside_temp) as avg_temp,
+                    AVG(energy_consumption) as avg_consumption
+                FROM weather_energy_correlation 
+                WHERE date >= DATEADD(day, -30, GETDATE())
+                AND building_id = 'smart-office-001'
+            """
+            custom string binding:refreshPolicy = "interval:86400s"
+            custom token binding:authMethod = "oauth2"
+            custom string binding:authProfile = "sql-warehouse"
+        )
+
+        # Real-time building metrics dashboard
+        string dashboardData = "" (
+            doc = "Real-time building metrics for dashboard"
+            custom token binding:protocol = "rest"
+            custom token binding:operation = "stream"
+            custom string binding:uri = "${facilityApiBase}/buildings/${buildingId}/dashboard"
+            custom token binding:method = "GET"
+            custom string binding:refreshPolicy = "interval:30s"
+            custom token binding:authMethod = "oauth2"
+            custom string binding:authProfile = "building-mgmt-api"
+        )
+    }
+}
+
+# Example alternative auth configurations for development/testing
+def Scope "TestEnvironment" (
+    prepend apiSchemas = ["BindingAPI"]
+    doc = "Test environment with different auth configurations"
+)
+{
+    # Override auth defaults for testing
+    dictionary binding:authDefaults:rest = {
+        "authMethod": "apikey",
+        "authProfile": "weather-api-dev"
+    }
+
+    # Simple test weather data
+    double testTemperature = 25.0 (
+        custom token binding:protocol = "rest"
+        custom token binding:operation = "read"
+        custom string binding:uri = "https://api.weather.com/v1/current/test"
+        custom token binding:method = "GET"
+        custom string binding:jsonPath = "$.temp"
+        custom string binding:refreshPolicy = "interval:60s"
+        # Uses weather-api-dev auth profile (API key)
+    )
+
+    # Local file-based testing
+    string testConfig = "" (
+        custom token binding:protocol = "file"
+        custom token binding:operation = "stream"
+        custom string binding:uri = "file://./test_data/config.json"
+        custom string binding:refreshPolicy = "interval:5s"
+    )
+}

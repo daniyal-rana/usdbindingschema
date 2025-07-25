@@ -1,0 +1,40 @@
+{
+  "auth_type": "mtls",
+  "client_cert_path": "client-cert.pem",
+  "client_key_path": "client-key.pem", 
+  "ca_cert_path": "ca-cert.pem",
+  "cert_format": "PEM",
+  "verify_hostname": true,
+  "verify_chain": true,
+  "connection_config": {
+    "timeout_seconds": 30,
+    "keep_alive_seconds": 60,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 5
+  },
+  "tls_config": {
+    "min_protocol_version": "TLSv1.2",
+    "cipher_suites": [
+      "ECDHE-RSA-AES256-GCM-SHA384",
+      "ECDHE-RSA-AES128-GCM-SHA256"
+    ],
+    "verify_mode": "CERT_REQUIRED"
+  },
+  "certificate_info": {
+    "issuer": "Smart Building CA",
+    "subject": "CN=mqtt-client-prod,O=Smart Building,C=US",
+    "valid_from": "2025-01-01T00:00:00Z",
+    "valid_until": "2026-01-01T00:00:00Z",
+    "serial_number": "ABC123456789"
+  },
+  "environment_variables": {
+    "cert_password_env": "MQTT_CERT_PASSWORD"
+  },
+  "metadata": {
+    "description": "Production MQTT broker mTLS certificates",
+    "broker": "iot.smartbuilding.com",
+    "port": 8883,
+    "contact": "security@smartbuilding.com",
+    "created": "2025-07-25T00:00:00Z"
+  }
+}

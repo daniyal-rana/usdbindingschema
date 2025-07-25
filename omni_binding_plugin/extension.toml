@@ -1,0 +1,25 @@
+[package]
+name = "omni.binding.protocol"
+version = "1.0.0"
+description = "USD Binding Protocol Handler for Omniverse"
+authors = ["USD Binding Team"]
+keywords = ["usd", "binding", "protocol", "mqtt", "rest", "sql"]
+
+[dependencies]
+"omni.kit.usd" = {}
+"omni.usd" = {}
+"omni.kit.property.usd" = {}
+"omni.kit.window.property" = {}
+"omni.kit.commands" = {}
+"omni.timeline" = {}
+
+[python.module]
+"omni.binding.protocol" = "omni/binding/protocol"
+
+[[python.module]]
+name = "omni.binding.protocol"
+path = "omni/binding/protocol"
+
+[settings]
+exts."omni.binding.protocol".enabled = true
+exts."omni.binding.protocol".autoload = true

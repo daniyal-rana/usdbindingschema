@@ -7,16 +7,6 @@ def "BindingAPI" (
     kind = "schema:api"
     documentation = """
     BindingAPI
-
-    This is an applied API schema that enables attaching dynamic external data bindings 
-    to prims and attributes in USD.
-
-    It supports:
-    - Protocol selection (mqtt, rest, sql, grpc, etc.)
-    - Operation mode (read, stream, write, connect, disconnect)
-    - Placeholder substitution via binding:context dictionaries
-    - Auth method hints without storing secrets
-    - Hierarchical inheritance of context + auth defaults
     """
 )
 {

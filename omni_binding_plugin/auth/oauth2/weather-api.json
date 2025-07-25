@@ -1,0 +1,33 @@
+{
+  "auth_type": "oauth2",
+  "client_id": "${WEATHER_API_CLIENT_ID}",
+  "client_secret": "${WEATHER_API_CLIENT_SECRET}",
+  "token_endpoint": "https://auth.weatherapi.com/oauth/token",
+  "scope": "weather.read forecast.read",
+  "grant_type": "client_credentials",
+  "token_cache": {
+    "enabled": true,
+    "cache_file": ".cache/weather-api-token.json",
+    "refresh_threshold_seconds": 300
+  },
+  "request_config": {
+    "timeout_seconds": 30,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 1
+  },
+  "token_format": {
+    "header_name": "Authorization",
+    "header_value_template": "Bearer {access_token}"
+  },
+  "environment_variables": {
+    "client_id_env": "WEATHER_API_CLIENT_ID",
+    "client_secret_env": "WEATHER_API_CLIENT_SECRET"
+  },
+  "metadata": {
+    "description": "Weather API OAuth2 configuration for production",
+    "api_docs": "https://docs.weatherapi.com/authentication",
+    "contact": "api-support@weatherapi.com",
+    "created": "2025-07-25T00:00:00Z",
+    "last_updated": "2025-07-25T00:00:00Z"
+  }
+}

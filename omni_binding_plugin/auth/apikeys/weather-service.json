@@ -1,0 +1,36 @@
+{
+  "auth_type": "apikey",
+  "api_key": "${WEATHER_SERVICE_API_KEY}",
+  "key_location": "header",
+  "key_name": "X-API-Key",
+  "additional_headers": {
+    "Accept": "application/json",
+    "User-Agent": "USD-Binding-Protocol/1.0"
+  },
+  "rate_limiting": {
+    "requests_per_minute": 1000,
+    "requests_per_day": 10000,
+    "burst_limit": 50
+  },
+  "request_config": {
+    "timeout_seconds": 30,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 1
+  },
+  "environment_variables": {
+    "api_key_env": "WEATHER_SERVICE_API_KEY"
+  },
+  "endpoints": {
+    "base_url": "https://api.weather.com/v1",
+    "current_weather": "/current",
+    "forecast": "/forecast",
+    "historical": "/historical"
+  },
+  "metadata": {
+    "description": "Weather service API key for development/testing",
+    "service": "WeatherAPI.com",
+    "tier": "Professional",
+    "contact": "support@weatherapi.com",
+    "created": "2025-07-25T00:00:00Z"
+  }
+}

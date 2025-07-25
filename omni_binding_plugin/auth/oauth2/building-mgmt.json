@@ -1,0 +1,36 @@
+{
+  "auth_type": "oauth2",
+  "client_id": "${BUILDING_MGMT_CLIENT_ID}",
+  "client_secret": "${BUILDING_MGMT_CLIENT_SECRET}",
+  "token_endpoint": "https://auth.buildingmgmt.com/oauth/token",
+  "scope": "hvac.read hvac.write sensors.read lighting.read",
+  "grant_type": "client_credentials",
+  "token_cache": {
+    "enabled": true,
+    "cache_file": ".cache/building-mgmt-token.json",
+    "refresh_threshold_seconds": 300
+  },
+  "request_config": {
+    "timeout_seconds": 30,
+    "retry_attempts": 2,
+    "retry_delay_seconds": 1
+  },
+  "token_format": {
+    "header_name": "Authorization", 
+    "header_value_template": "Bearer {access_token}"
+  },
+  "additional_headers": {
+    "User-Agent": "USD-Binding-Protocol/1.0",
+    "Accept": "application/json"
+  },
+  "environment_variables": {
+    "client_id_env": "BUILDING_MGMT_CLIENT_ID",
+    "client_secret_env": "BUILDING_MGMT_CLIENT_SECRET"
+  },
+  "metadata": {
+    "description": "Building management system API OAuth2 configuration",
+    "building": "Smart Office Complex",
+    "contact": "facilities@company.com",
+    "created": "2025-07-25T00:00:00Z"
+  }
+}

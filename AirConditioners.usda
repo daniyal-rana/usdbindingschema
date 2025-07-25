@@ -6,7 +6,7 @@ def Scope "HelloWorldAirCon" (
 {
     # Vars
     dictionary binding:context = {
-        "region": "us-east-1",
+        "region": "uscentral",
         "mqttBroker": "mqtts://test.mosquitto.org:1883",
         "sqlEndpoint": "sql://x6eps4xrq2xudenlfv6naeo3i4-qnsrltphqlxuxjjiiozeegc3aq.msit-datawarehouse.fabric.microsoft.com/alashlakehouse",
         "apiBase": "https://api.test.com"
@@ -51,6 +51,7 @@ def Scope "HelloWorldAirCon" (
             custom string binding:jsonPath = "$.serialNumber"
             custom token binding:authMethod = "oauth2"
             custom string binding:authProfile = "corp-oauth-prod"
+            # this overrides the auth
         )
 
         # SQL: Read maintenance status
