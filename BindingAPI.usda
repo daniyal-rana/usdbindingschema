@@ -1,0 +1,94 @@
+#usda 1.0
+(
+    defaultPrim = "BindingAPI"
+)
+
+def "BindingAPI" (
+    kind = "schema:api"
+    documentation = """
+    BindingAPI
+
+    This is an applied API schema that enables attaching dynamic external data bindings 
+    to prims and attributes in USD.
+
+    It supports:
+    - Protocol selection (mqtt, rest, sql, grpc, etc.)
+    - Operation mode (read, stream, write, connect, disconnect)
+    - Placeholder substitution via binding:context dictionaries
+    - Auth method hints without storing secrets
+    - Hierarchical inheritance of context + auth defaults
+    """
+)
+{
+    #
+    # Prim-level fields (applied to any prim)
+    #
+
+    custom dictionary binding:context (
+        documentation = "Key-value pairs for placeholder substitution, inherited hierarchically."
+    )
+
+    custom dictionary binding:authDefaults:mqtt (
+        documentation = "Default auth metadata for MQTT protocol under this prim scope."
+    )
+
+    custom dictionary binding:authDefaults:rest (
+        documentation = "Default auth metadata for REST protocol under this prim scope."
+    )
+
+    custom dictionary binding:authDefaults:sql (
+        documentation = "Default auth metadata for SQL protocol under this prim scope."
+    )
+
+    #
+    # Attribute-level metadata (applied to any attribute)
+    #
+
+    # Core binding info
+    custom token binding:protocol (
+        allowedTokens = ["mqtt", "rest", "sql", "grpc", "websocket", "file"],
+        documentation = "Protocol used for this binding."
+    )
+
+    custom token binding:operation (
+        allowedTokens = ["read", "stream", "write", "connect", "disconnect"],
+        documentation = "Operation mode for this binding (read once, stream, write, etc.)"
+    )
+
+    # Connection details (protocol-specific)
+    custom string binding:uri (
+        documentation = "Base URI or connection string for the binding (e.g., mqtts://broker:8883)."
+    )
+    custom string binding:topic (
+        documentation = "MQTT topic or subscription path (optional, MQTT/WebSocket)."
+    )
+    custom token binding:method (
+        allowedTokens = ["GET", "POST", "PUT", "PATCH", "DELETE"],
+        documentation = "HTTP method for REST bindings."
+    )
+    custom string binding:query (
+        documentation = "SQL query or gRPC request payload."
+    )
+    custom string binding:jsonPath (
+        documentation = "JSONPath expression for extracting data from REST responses."
+    )
+
+    # Refresh policies
+    custom string binding:refreshPolicy (
+        documentation = "Refresh policy (e.g., 'onLoad', 'interval:300s')."
+    )
+
+    # Auth hints (no secrets stored)
+    custom token binding:authMethod (
+        allowedTokens = ["none", "oauth2", "apikey", "mtls"],
+        documentation = "Auth method hint for this binding."
+    )
+    custom string binding:authProfile (
+        documentation = "Symbolic auth profile name (resolved by runtime)."
+    )
+
+    # Optional scope for OAuth2
+    custom string binding:authScope (
+        documentation = "OAuth2 scope or resource identifier (optional)."
+    )
+}
