@@ -62,6 +62,9 @@ def "BindingAPI" (
     custom string binding:jsonPath (
         documentation = "JSONPath expression for extracting data from REST responses."
     )
+    custom string binding:schema (
+        documentation = "Schema Association from Message"
+    )
 
     # Refresh policies
     custom string binding:refreshPolicy (

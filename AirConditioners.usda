@@ -39,7 +39,8 @@ def Scope "HelloWorldAirCon" (
             custom token binding:operation = "stream"
             custom string binding:uri = "${mqttBroker}"
             custom string binding:topic = "/hvac/${deviceName}/temperature"
-            # authMethod NOT set → will inherit from authDefaults:mqtt
+            custom string binding:schema = "opcua"
+            # authMethod NOT set,  will inherit from authDefaults:mqtt
         )
 
         # REST: Read serial number
