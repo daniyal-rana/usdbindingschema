@@ -4,8 +4,50 @@ Binding parser for extracting and processing USD binding metadata
 
 import re
 from typing import Dict, Any, Optional, List
-from pxr import Usd, Sdf
-import carb
+
+# Handle imports for testing outside Omniverse
+try:
+    from pxr import Usd, Sdf
+    USD_AVAILABLE = True
+except ImportError:
+    USD_AVAILABLE = False
+    # Mock USD classes for testing
+    class MockUsdPrim:
+        def GetPath(self): return "/MockPrim"
+        def HasAttribute(self, name): return True
+        def GetAttribute(self, name): return MockUsdAttribute()
+        def GetParent(self): return None
+        def IsValid(self): return True
+    
+    class MockUsdAttribute:
+        def IsValid(self): return True
+        def Get(self): return {"test": "value"}
+    
+    class Usd:
+        Prim = MockUsdPrim
+    
+    class Sdf:
+        pass
+
+try:
+    import carb
+except ImportError:
+    # Use mock carb for testing
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+    try:
+        import mock_carb as carb
+    except ImportError:
+        # Fallback if mock_carb isn't available
+        class MockCarb:
+            @staticmethod
+            def log_info(msg): print(f"[INFO] {msg}")
+            @staticmethod
+            def log_warn(msg): print(f"[WARN] {msg}")
+            @staticmethod
+            def log_error(msg): print(f"[ERROR] {msg}")
+        carb = MockCarb()
 
 
 class BindingParser:

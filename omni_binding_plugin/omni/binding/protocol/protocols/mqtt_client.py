@@ -5,7 +5,27 @@ MQTT protocol client implementation
 import asyncio
 import json
 from typing import Dict, Any, Callable, Optional
-import carb
+
+# Handle carb import for testing outside Omniverse
+try:
+    import carb
+except ImportError:
+    # Use mock carb for testing
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+    try:
+        import mock_carb as carb
+    except ImportError:
+        # Fallback if mock_carb isn't available
+        class MockCarb:
+            @staticmethod
+            def log_info(msg): print(f"[INFO] {msg}")
+            @staticmethod
+            def log_warn(msg): print(f"[WARN] {msg}")
+            @staticmethod
+            def log_error(msg): print(f"[ERROR] {msg}")
+        carb = MockCarb()
 
 try:
     import aiomqtt
