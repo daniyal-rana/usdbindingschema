@@ -39,7 +39,7 @@ def Scope "HelloWorldAirCon" (
             custom token binding:operation = "stream"
             custom string binding:uri = "${mqttBroker}"
             custom string binding:topic = "/hvac/${deviceName}/temperature"
-            custom string binding:schema = "opcua"
+            custom string binding:schema = "opcua" #we need more info to walk through this...
             # authMethod NOT set,  will inherit from authDefaults:mqtt
         )
 
