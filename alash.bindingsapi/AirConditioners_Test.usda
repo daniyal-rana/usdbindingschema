@@ -1,0 +1,26 @@
+#usda 1.0
+
+def Scope "HelloWorldAirCon" (
+    prepend apiSchemas = ["MQTTBindingAPI"]
+)
+{
+    def Cube "AirConditioner_001"
+    {
+        string deviceName = "aircon3245"
+
+        # MQTT: Cloud Events temperature - Simple MQTT schema format
+        double temperature = 0.0 (
+            customData = {
+                dictionary mqtt = {
+                    string broker = "localhost:1883"
+                    string topic = "cloudevents/temperature"
+                    string jsonPath = "$.data.temperature"
+                    string unit = "celsius"
+                    string description = "Air conditioner intake temperature sensor"
+                    int qos = 1
+                    bool enabled = true
+                }
+            }
+        ) 
+    }
+}
