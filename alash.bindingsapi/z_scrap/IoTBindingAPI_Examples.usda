@@ -1,0 +1,87 @@
+#usda 1.0
+(
+    """ 
+    Simple MQTT Binding Examples - POC focused on MQTT only
+    
+    This file demonstrates basic MQTT data binding for USD attributes.
+    """
+    subLayers = [
+        @./MQTTBindingAPI.usda@
+    ]
+)
+
+def Scope "MQTTSensors" 
+{
+    def Cube "TemperatureSensor" (
+        prepend apiSchemas = ["MQTTBindingAPI"]
+    )
+    {
+        string deviceName = "TEMP-001"
+        
+        # Simple temperature reading from MQTT
+        double temperature = 22.5 (
+            customData = {
+                dictionary mqtt = {
+                    string broker = "localhost:1883"
+                    string topic = "sensors/temperature"
+                    string jsonPath = "$.value"
+                    string unit = "celsius"
+                    string description = "Room temperature sensor"
+                }
+            }
+        )
+    }
+    
+    def Sphere "HumiditySensor" (
+        prepend apiSchemas = ["MQTTBindingAPI"]
+    )
+    {
+        string deviceName = "HUM-001"
+        
+        # Humidity with CloudEvents format
+        double humidity = 45.0 (
+            customData = {
+                dictionary mqtt = {
+                    string broker = "localhost:1883"
+                    string topic = "cloudevents/humidity"
+                    string jsonPath = "$.data.humidity"
+                    string unit = "percent"
+                    string description = "Environmental humidity"
+                    int qos = 1
+                }
+            }
+        )
+    }
+    
+    def Cylinder "PressureSensor" (
+        prepend apiSchemas = ["MQTTBindingAPI"]
+    )
+    {
+        string deviceName = "PRESS-001"
+        
+        # Pressure reading with complex JSON path
+        double pressure = 1013.25 (
+            customData = {
+                dictionary mqtt = {
+                    string broker = "localhost:1883"
+                    string topic = "environment/pressure"
+                    string jsonPath = "$.measurements.pressure"
+                    string unit = "hPa"
+                    string description = "Atmospheric pressure"
+                }
+            }
+        )
+        
+        # Location from same topic but different JSON path
+        string location = "Room A" (
+            customData = {
+                dictionary mqtt = {
+                    string broker = "localhost:1883"
+                    string topic = "environment/pressure"
+                    string jsonPath = "$.location"
+                    string description = "Sensor location"
+                }
+            }
+        )
+    }
+}

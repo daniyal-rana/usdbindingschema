@@ -1,0 +1,18 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Types": {
+                    "MQTTBindingAPI": {
+                        "bases": [],
+                        "description": "MQTT data binding API for connecting USD attributes to MQTT data sources",
+                        "displayName": "MQTT Binding API",
+                        "schemaKind": "nonAppliedAPI"
+                    }
+                }
+            },
+            "Name": "mqttBindingAPI",
+            "Type": "resource"
+        }
+    ]
+}
