@@ -10,6 +10,7 @@
 
 import omni.ext
 import omni.ui as ui
+import omni.usd
 import asyncio
 import json
 import threading
@@ -81,6 +82,10 @@ class BindingConfiguration:
         self.prim_path = prim_path
         self.attr_name = attr_name
         
+        # USD references for live updates
+        self.usd_stage = None
+        self.usd_attribute = None
+        
         # Check for new simplified MQTT schema format
         if 'mqtt' in config and isinstance(config['mqtt'], dict):
             mqtt_dict = config['mqtt']
@@ -119,6 +124,39 @@ class BindingConfiguration:
             self.qos = 0
             self.enabled = True
             self.refresh_interval = 5000
+    
+    def set_usd_references(self, stage, attribute):
+        """Store USD stage and attribute references for live updates."""
+        self.usd_stage = stage
+        self.usd_attribute = attribute
+        
+    def update_usd_value(self, value):
+        """Update the USD attribute with new value."""
+        if self.usd_attribute and self.usd_stage:
+            try:
+                # Convert value to appropriate type based on attribute type
+                attr_type = self.usd_attribute.GetTypeName()
+                
+                if attr_type.type.pythonClass == float:
+                    converted_value = float(value)
+                elif attr_type.type.pythonClass == int:
+                    converted_value = int(float(value))  # Convert through float to handle decimals
+                elif attr_type.type.pythonClass == str:
+                    converted_value = str(value)
+                else:
+                    converted_value = value
+                
+                # Set the value at the default time code (current frame)
+                from pxr import Usd
+                self.usd_attribute.Set(converted_value, Usd.TimeCode.Default())
+                
+                print(f"[alash.bindingsapi] Updated USD attribute {self.display_name} = {converted_value}")
+                return True
+                
+            except Exception as e:
+                print(f"[alash.bindingsapi] Error updating USD attribute {self.display_name}: {e}")
+                return False
+        return False
             
     def _parse_mqtt_uri(self, uri):
         """Extract broker address from MQTT URI."""
@@ -237,9 +275,11 @@ class GenericMQTTReader:
                 try:
                     value = self._extract_value(data, binding.json_path)
                     if value is not None:
+                        # Store value for UI updates
                         self.values[binding_id] = value
                         self.last_updates[binding_id] = time.strftime("%H:%M:%S")
-                        print(f"[alash.bindingsapi] Updated {binding_id}: {value}")
+                        
+                        print(f"[alash.bindingsapi] Received {binding_id}: {value}")
                         
                         # Notify callbacks
                         for callback in self.callbacks:
@@ -374,6 +414,10 @@ class USDBindingParser:
                             print(f"[alash.bindingsapi] Using legacy format with direct keys: {list(custom_data.keys())}")
                             
                         binding_config = BindingConfiguration(prim_path, attr_name, custom_data)
+                        
+                        # Store USD references for live updates
+                        binding_config.set_usd_references(stage, attr)
+                        
                         print(f"[alash.bindingsapi] Binding: protocol={binding_config.protocol}, broker={binding_config.broker}, topic={binding_config.topic}")
                         
                         if binding_config.is_mqtt_stream():
@@ -459,6 +503,7 @@ class MyExtension(omni.ext.IExt):
                 success = self.mqtt_reader.add_binding(binding)
                 print(f"[alash.bindingsapi] Added binding: {binding.display_name} -> {binding.topic} (success: {success})")
                 print(f"[alash.bindingsapi] Binding details: protocol={binding.protocol}, broker={binding.broker}, topic={binding.topic}, json_path={binding.json_path}")
+                print(f"[alash.bindingsapi] USD refs: stage={binding.usd_stage is not None}, attr={binding.usd_attribute is not None}")
         
         print(f"[alash.bindingsapi] Total bindings loaded: {len(self.bindings)}")
         if not self.bindings:
@@ -484,6 +529,7 @@ class MyExtension(omni.ext.IExt):
                         with ui.VStack(spacing=5):
                             self.value_labels = {}
                             self.update_labels = {}
+                            self.usd_buttons = {}
                             
                             for binding in self.bindings:
                                 with ui.Frame():
@@ -505,6 +551,15 @@ class MyExtension(omni.ext.IExt):
                                         self.update_labels[binding.display_name] = ui.Label(
                                             "Last Update: Never", style={"font_size": 10}
                                         )
+                                        
+                                        # Update USD button
+                                        self.usd_buttons[binding.display_name] = ui.Button(
+                                            "Update USD",
+                                            clicked_fn=lambda b=binding: self._update_usd_for_binding(b),
+                                            enabled=False,
+                                            style={"margin": 5}
+                                        )
+                                        
                                         ui.Spacer(height=10)
                 else:
                     ui.Label("No MQTT bindings found in USD files", style={"color": 0xFFAA00})
@@ -571,11 +626,39 @@ class MyExtension(omni.ext.IExt):
         self._create_ui()
         self.mqtt_reader.add_callback(self._on_value_update)
         
+    def _update_usd_for_binding(self, binding):
+        """Update USD attribute for a specific binding using its last known value."""
+        binding_id = binding.display_name
+        if binding_id in self.mqtt_reader.values and self.mqtt_reader.values[binding_id] is not None:
+            value = self.mqtt_reader.values[binding_id]
+            success = binding.update_usd_value(value)
+            if success:
+                print(f"[alash.bindingsapi] ✓ Manually updated USD attribute {binding_id} = {value}")
+                # Update button text temporarily to show success
+                if hasattr(self, 'usd_buttons') and binding_id in self.usd_buttons:
+                    original_text = "Update USD"
+                    self.usd_buttons[binding_id].text = "✓ Updated!"
+                    
+                    # Reset button text after 2 seconds
+                    def reset_button():
+                        time.sleep(2)
+                        if hasattr(self, 'usd_buttons') and binding_id in self.usd_buttons:
+                            self.usd_buttons[binding_id].text = original_text
+                    threading.Thread(target=reset_button, daemon=True).start()
+            else:
+                print(f"[alash.bindingsapi] ✗ Failed to update USD attribute {binding_id}")
+        else:
+            print(f"[alash.bindingsapi] No value available for {binding_id}")
+        
     def _on_value_update(self, binding_id, value, last_update):
         """Called when a binding value is updated from MQTT."""
         if hasattr(self, 'value_labels') and binding_id in self.value_labels:
             self.value_labels[binding_id].text = f"Value: {value}"
             self.update_labels[binding_id].text = f"Last Update: {last_update}"
+            
+            # Enable the Update USD button when we have a value
+            if hasattr(self, 'usd_buttons') and binding_id in self.usd_buttons:
+                self.usd_buttons[binding_id].enabled = True
 
     def on_shutdown(self):
         """This is called every time the extension is deactivated. It is used
