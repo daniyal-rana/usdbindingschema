@@ -1,26 +1,70 @@
 #usda 1.0
 
-def Scope "HelloWorldAirCon" (
-    prepend apiSchemas = ["MQTTBindingAPI"]
-)
+def Scope "HelloWorldAirCon"
 {
     def Cube "AirConditioner_001"
     {
         string deviceName = "aircon3245"
 
-        # MQTT: Cloud Events temperature - Simple MQTT schema format
+        # EVENT Binding
         double temperature = 0.0 (
             customData = {
-                dictionary mqtt = {
-                    string broker = "localhost:1883"
-                    string topic = "cloudevents/temperature"
-                    string jsonPath = "$.data.temperature"
+                dictionary event = {
+                    # Connection reference
+                    string connectionRef = "mqtt_local"
+                    string configFile = "usd_config/connections.toml"
+                    
+                    # Namespace
+                    string endpointTarget = "cloudevents/temperature"
+                    
+                    # Filtering
+                    string filterExpression = "$.data.temperature.Value"
+                    string deviceMatchField = "subject"
+                    string deviceMatchValue = "aircon3245"
+                    
+                    # Delivery
+                    int reliability = 1  # QoS 1
+                    
+                    # Data Shape
+                    string payloadFormat = "JSON"
+                    string schema = ""
+                    
+                    # Metadata
                     string unit = "celsius"
-                    string description = "Air conditioner intake temperature sensor"
-                    int qos = 1
+                    string description = "Air conditioner temperature from OPC UA PubSub via MQTT"
                     bool enabled = true
                 }
             }
-        ) 
+        )
+        
+        # REQUEST Binding
+        string status = "unknown" (
+            customData = {
+                dictionary request = {
+                    # Connection reference
+                    string connectionRef = "api_local"
+                    string configFile = "usd_config/connections.toml"
+                    
+                    # Namespace
+                    string endpointTarget = "/devices/aircon3245/status"
+                    string method = "GET"
+                    
+                    # Filtering
+                    string filterExpression = "$.status"
+                    
+                    # Delivery
+                    int reliability = 3  # Max retries
+                    
+                    # Data Shape
+                    string payloadFormat = "JSON"
+                    string schema = ""
+                    
+                    # Metadata
+                    string description = "Device operational status via REST API"
+                    int pollIntervalSeconds = 30
+                    bool enabled = true
+                }
+            }
+        )
     }
 }

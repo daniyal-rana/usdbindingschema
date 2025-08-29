@@ -1,0 +1,26 @@
+{
+    "specversion": "1.0",
+    "type": "ua-deltaframe",
+    "source": "urn:factory:aggregationserver:opcua",
+    "id": "msg-1753893841",
+    "time": "2025-07-30T09:44:01Z",
+    "datacontenttype": "application/json",
+    "subject": "aircon3245",
+    "sequence": 19409,
+    "opcuametadatamajorversion": 1,
+    "opcuametadataminorversion": 0,
+    "data": {
+        "temperature": {
+            "Value": 23.5,
+            "SourceTimestamp": "2025-07-30T09:44:01Z"
+        },
+        "unit": {
+            "Value": "celsius",
+            "SourceTimestamp": "2025-07-30T09:44:01Z"
+        },
+        "deviceId": {
+            "Value": "aircon3245",
+            "SourceTimestamp": "2025-07-30T09:44:01Z"
+        }
+    }
+}

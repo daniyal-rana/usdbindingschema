@@ -1,0 +1,67 @@
+[connections]
+
+[connections.mqtt_local]
+protocol = "mqtt"
+host = "localhost:1883"
+username = ""
+password = ""
+client_id = "usd_binding_client"
+keepalive = 60
+clean_session = true
+tls_enabled = false
+
+[connections.mqtt_prod]
+protocol = "mqtt"
+host = "prod-mqtt.company.com:8883"
+username = "${MQTT_USERNAME}"
+password = "${MQTT_PASSWORD}"
+client_id = "usd_binding_prod"
+keepalive = 60
+clean_session = true
+tls_enabled = true
+ca_cert_path = "/etc/ssl/certs/mqtt-ca.pem"
+
+[connections.api_prod]
+protocol = "http"
+host = "https://api.company.com"
+auth_method = "api_key"
+api_key = "${API_KEY}"
+timeout = 30
+tls_enabled = true
+retry_count = 3
+
+[connections.api_local]
+protocol = "http"
+host = "http://localhost:5000"
+auth_method = "none"
+timeout = 10
+tls_enabled = false
+retry_count = 2
+
+[connections.kafka_dev]
+protocol = "kafka"
+bootstrap_servers = "localhost:9092"
+security_protocol = "PLAINTEXT"
+client_id = "usd_binding_kafka"
+group_id = "usd_consumers"
+auto_offset_reset = "latest"
+
+[connections.kafka_prod]
+protocol = "kafka"
+bootstrap_servers = "${KAFKA_BOOTSTRAP_SERVERS}"
+security_protocol = "SASL_SSL"
+sasl_mechanism = "PLAIN"
+sasl_username = "${KAFKA_USERNAME}"
+sasl_password = "${KAFKA_PASSWORD}"
+client_id = "usd_binding_kafka_prod"
+group_id = "usd_consumers"
+
+[connections.rabbitmq_dev]
+protocol = "rabbitmq"
+host = "localhost"
+port = 5672
+username = "guest"
+password = "guest"
+virtual_host = "/"
+exchange = "cloudevents"
+routing_key = "temperature"

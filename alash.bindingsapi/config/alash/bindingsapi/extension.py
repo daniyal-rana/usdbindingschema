@@ -40,6 +40,23 @@ def install_pip_packages():
     except Exception as e:
         print(f"[alash.bindingsapi] Error installing jsonpath-ng: {e}")
         print("[alash.bindingsapi] jsonpath-ng is optional - basic JSONPath will still work")
+    
+    # Install requests for HTTP bindings
+    try:
+        print("[alash.bindingsapi] Installing requests...")
+        omni.kit.pipapi.install("requests")
+        print("[alash.bindingsapi] requests installed successfully")
+    except Exception as e:
+        print(f"[alash.bindingsapi] Error installing requests: {e}")
+    
+    # Install tomli for TOML parsing
+    try:
+        print("[alash.bindingsapi] Installing tomli...")
+        omni.kit.pipapi.install("tomli")
+        print("[alash.bindingsapi] tomli installed successfully")
+    except Exception as e:
+        print(f"[alash.bindingsapi] Error installing tomli: {e}")
+        print("[alash.bindingsapi] TOML config files may not work without tomli")
 
 # Try to install packages (but don't fail if it doesn't work)
 try:
@@ -50,6 +67,7 @@ except Exception as e:
 # Import packages after installation
 mqtt = None
 jsonpath_parse = None
+requests = None
 
 try:
     import paho.mqtt.client as mqtt
@@ -65,6 +83,16 @@ except ImportError as e:
     jsonpath_parse = None
     print(f"[alash.bindingsapi] ✗ jsonpath-ng not available: {e}")
     print("[alash.bindingsapi] Note: Extension will work with basic JSONPath support")
+
+try:
+    import requests
+    print("[alash.bindingsapi] ✓ requests imported successfully")
+except ImportError as e:
+    requests = None
+    print(f"[alash.bindingsapi] ✗ requests not available: {e}")
+
+# Import our config manager
+from .config_manager import ConfigManager, EventBindingConfiguration
 
 
 # Functions and vars are available to other extensions as usual in python:
@@ -215,6 +243,151 @@ class BindingConfiguration:
         return self.broker, 1883
 
 
+class GenericHTTPPoller:
+    """Generic HTTP client to poll REST APIs based on request binding configurations."""
+    
+    def __init__(self):
+        self.bindings = []
+        self.values = {}    # binding_id -> current value
+        self.last_updates = {}  # binding_id -> timestamp
+        self.callbacks = []
+        self.polling_threads = {}  # binding_id -> thread
+        self.stop_polling = {}     # binding_id -> stop flag
+        
+    def add_callback(self, callback):
+        """Add a callback function to be called when values update."""
+        self.callbacks.append(callback)
+        
+    def add_binding(self, binding_config):
+        """Add a request binding configuration to monitor."""
+        if not binding_config.is_http_request():
+            return False
+            
+        self.bindings.append(binding_config)
+        
+        binding_id = binding_config.display_name
+        self.values[binding_id] = None
+        self.last_updates[binding_id] = "Never"
+        self.stop_polling[binding_id] = False
+        
+        # Start polling thread for this binding
+        self._start_polling_thread(binding_config)
+        
+        return True
+        
+    def _start_polling_thread(self, binding_config):
+        """Start a polling thread for a specific binding."""
+        if requests is None:
+            print("[alash.bindingsapi] requests library not available for HTTP polling")
+            return
+            
+        def poll_loop():
+            binding_id = binding_config.display_name
+            poll_interval = binding_config.poll_interval_seconds
+            
+            print(f"[alash.bindingsapi] Starting HTTP polling for {binding_id} every {poll_interval}s")
+            
+            while not self.stop_polling.get(binding_id, True):
+                try:
+                    # Build the full URL
+                    base_url = binding_config.get_host()
+                    endpoint = binding_config.endpoint_target
+                    full_url = f"{base_url}{endpoint}"
+                    
+                    # Get auth info
+                    auth_info = binding_config.get_auth_info()
+                    headers = {}
+                    auth = None
+                    
+                    # Set up authentication
+                    if auth_info.get('auth_method') == 'api_key' and auth_info.get('api_key'):
+                        headers['Authorization'] = f"Bearer {auth_info['api_key']}"
+                    elif auth_info.get('username') and auth_info.get('password'):
+                        auth = (auth_info['username'], auth_info['password'])
+                    
+                    # Make the HTTP request
+                    timeout = binding_config.connection_config.get('timeout', 30) if binding_config.connection_config else 30
+                    
+                    print(f"[alash.bindingsapi] Polling {full_url}")
+                    response = requests.get(full_url, headers=headers, auth=auth, timeout=timeout)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        # Extract value using filter expression
+                        value = self._extract_value(data, binding_config.filter_expression)
+                        
+                        if value is not None:
+                            # Store value for UI updates
+                            self.values[binding_id] = value
+                            self.last_updates[binding_id] = time.strftime("%H:%M:%S")
+                            
+                            print(f"[alash.bindingsapi] HTTP Response {binding_id}: {value}")
+                            
+                            # Update USD attribute
+                            binding_config.update_usd_value(value)
+                            
+                            # Notify callbacks
+                            for callback in self.callbacks:
+                                try:
+                                    callback(binding_id, value, self.last_updates[binding_id])
+                                except Exception as e:
+                                    print(f"[alash.bindingsapi] Error in HTTP callback: {e}")
+                        else:
+                            print(f"[alash.bindingsapi] Could not extract value from response using {binding_config.filter_expression}")
+                    else:
+                        print(f"[alash.bindingsapi] HTTP request failed: {response.status_code} - {response.text}")
+                        
+                except Exception as e:
+                    print(f"[alash.bindingsapi] Error polling {binding_id}: {e}")
+                
+                # Wait for next poll interval
+                time.sleep(poll_interval)
+                
+        # Start the polling thread
+        thread = threading.Thread(target=poll_loop, daemon=True)
+        thread.start()
+        self.polling_threads[binding_config.display_name] = thread
+        
+    def _extract_value(self, data, json_path):
+        """Extract value from JSON data using JSONPath."""
+        if not json_path:
+            return data
+            
+        try:
+            # Try advanced JSONPath first
+            if jsonpath_parse:
+                parsed_path = jsonpath_parse(json_path)
+                matches = parsed_path.find(data)
+                if matches:
+                    return matches[0].value
+            else:
+                # Fallback to basic JSONPath for simple cases
+                if json_path.startswith('$.'):
+                    path_parts = json_path[2:].split('.')
+                    current = data
+                    for part in path_parts:
+                        if isinstance(current, dict) and part in current:
+                            current = current[part]
+                        else:
+                            return None
+                    return current
+        except Exception as e:
+            print(f"[alash.bindingsapi] Error extracting value with JSONPath {json_path}: {e}")
+            
+        return None
+        
+    def stop_all_polling(self):
+        """Stop all polling threads."""
+        for binding_id in self.stop_polling:
+            self.stop_polling[binding_id] = True
+        
+        # Wait for threads to finish
+        for thread in self.polling_threads.values():
+            if thread.is_alive():
+                thread.join(timeout=1)
+
+
 class GenericMQTTReader:
     """Generic MQTT client to read data based on binding configurations."""
     
@@ -232,7 +405,7 @@ class GenericMQTTReader:
         
     def add_binding(self, binding_config):
         """Add a binding configuration to monitor."""
-        if not binding_config.is_mqtt_stream():
+        if not binding_config.is_mqtt_event():
             return False
             
         topic = binding_config.topic
@@ -243,7 +416,37 @@ class GenericMQTTReader:
         binding_id = binding_config.display_name
         self.values[binding_id] = None
         self.last_updates[binding_id] = "Never"
+        
+        # Connect to MQTT if not already connected
+        self._ensure_connected(binding_config)
+        
         return True
+        
+    def _ensure_connected(self, binding_config):
+        """Ensure MQTT client is connected for this binding."""
+        if self.client is None or not self.connected:
+            if mqtt is None:
+                print("[alash.bindingsapi] paho-mqtt not available")
+                return
+                
+            try:
+                host, port = binding_config.get_broker_host_port()
+                auth_info = binding_config.get_auth_info()
+                
+                self.client = mqtt.Client()
+                self.client.on_connect = self.on_connect
+                self.client.on_message = self.on_message
+                
+                # Set authentication if provided
+                if auth_info.get('username') and auth_info.get('password'):
+                    self.client.username_pw_set(auth_info['username'], auth_info['password'])
+                
+                print(f"[alash.bindingsapi] Connecting to MQTT broker: {host}:{port}")
+                self.client.connect(host, port, 60)
+                self.client.loop_start()
+                
+            except Exception as e:
+                print(f"[alash.bindingsapi] Error connecting to MQTT broker: {e}")
         
     def on_connect(self, client, userdata, flags, rc):
         """Called when MQTT client connects."""
@@ -273,13 +476,22 @@ class GenericMQTTReader:
                 binding_id = binding.display_name
                 
                 try:
-                    value = self._extract_value(data, binding.json_path)
+                    # Check device matching for CloudEvents
+                    if binding.device_match_field and binding.device_match_value:
+                        device_field_value = self._extract_value(data, f"$.{binding.device_match_field}")
+                        if device_field_value != binding.device_match_value:
+                            continue  # Skip this binding if device doesn't match
+                    
+                    value = self._extract_value(data, binding.filter_expression)
                     if value is not None:
                         # Store value for UI updates
                         self.values[binding_id] = value
                         self.last_updates[binding_id] = time.strftime("%H:%M:%S")
                         
                         print(f"[alash.bindingsapi] Received {binding_id}: {value}")
+                        
+                        # Update USD attribute
+                        binding.update_usd_value(value)
                         
                         # Notify callbacks
                         for callback in self.callbacks:
@@ -439,6 +651,57 @@ class USDBindingParser:
         return bindings
     
     @staticmethod
+    def parse_usd_file_new(file_path, config_manager):
+        """Parse USD file and extract new event/request binding configurations."""
+        bindings = []
+        try:
+            print(f"[alash.bindingsapi] Attempting to parse USD file: {file_path}")
+            stage = Usd.Stage.Open(file_path)
+            if not stage:
+                print(f"[alash.bindingsapi] Could not open USD file: {file_path}")
+                return bindings
+                
+            print(f"[alash.bindingsapi] Successfully opened USD stage")
+            for prim in stage.Traverse():
+                prim_path = str(prim.GetPath())
+                
+                # Check all attributes for binding metadata
+                for attr in prim.GetAttributes():
+                    attr_name = attr.GetName()
+                    metadata = attr.GetAllMetadata()
+                    
+                    # Look for event/request binding configurations in customData
+                    custom_data = metadata.get('customData', {})
+                    
+                    # Check for new event or request binding format
+                    has_event_binding = 'event' in custom_data and isinstance(custom_data['event'], dict)
+                    has_request_binding = 'request' in custom_data and isinstance(custom_data['request'], dict)
+                    
+                    # Also support legacy mqtt binding for backward compatibility
+                    has_mqtt_binding = 'mqtt' in custom_data and isinstance(custom_data['mqtt'], dict)
+                    
+                    if has_event_binding or has_request_binding or has_mqtt_binding:
+                        print(f"[alash.bindingsapi] Found binding metadata for {prim_path}.{attr_name}")
+                        
+                        try:
+                            binding_config = EventBindingConfiguration(prim_path, attr_name, custom_data, config_manager)
+                            
+                            # Store USD references for live updates
+                            binding_config.set_usd_references(stage, attr)
+                            
+                            print(f"[alash.bindingsapi] Binding: type={binding_config.binding_type}, protocol={binding_config.get_protocol()}, endpoint={binding_config.topic}")
+                            
+                            bindings.append(binding_config)
+                            
+                        except Exception as e:
+                            print(f"[alash.bindingsapi] Error creating binding config for {prim_path}.{attr_name}: {e}")
+                            
+        except Exception as e:
+            print(f"[alash.bindingsapi] Error parsing USD file {file_path}: {e}")
+            
+        return bindings
+    
+    @staticmethod
     def find_usd_files(directory):
         """Find all USD files in directory."""
         import os
@@ -464,8 +727,16 @@ class MyExtension(omni.ext.IExt):
         """This is called every time the extension is activated."""
         print("[alash.bindingsapi] Extension startup")
 
-        # Initialize MQTT reader
+        # Calculate extension root directory first
+        current_file = os.path.abspath(__file__)
+        config_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+        self.extension_root = os.path.dirname(config_dir)
+        print(f"[alash.bindingsapi] Extension root: {self.extension_root}")
+
+        # Initialize config manager, MQTT reader, and HTTP poller
+        self.config_manager = ConfigManager(self.extension_root)
         self.mqtt_reader = GenericMQTTReader()
+        self.http_poller = GenericHTTPPoller()
         self.bindings = []
         
         print("[alash.bindingsapi] About to load bindings...")
@@ -478,46 +749,47 @@ class MyExtension(omni.ext.IExt):
         self._create_ui()
         print("[alash.bindingsapi] UI created")
         
-        # Add callback to update UI when values change
+        # Add callbacks to update UI when values change
         self.mqtt_reader.add_callback(self._on_value_update)
+        self.http_poller.add_callback(self._on_value_update)
         print("[alash.bindingsapi] Extension startup complete")
 
     def _load_bindings(self):
         """Load binding configurations from USD files."""
-        import os
-        
-        # Get extension directory
-        ext_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        print(f"[alash.bindingsapi] Extension directory: {ext_dir}")
+        print(f"[alash.bindingsapi] Extension directory: {self.extension_root}")
         
         # Find and parse USD files
-        usd_files = USDBindingParser.find_usd_files(ext_dir)
+        usd_files = USDBindingParser.find_usd_files(self.extension_root)
         print(f"[alash.bindingsapi] Found USD files: {usd_files}")
         
         for usd_file in usd_files:
             print(f"[alash.bindingsapi] Processing USD file: {usd_file}")
-            bindings = USDBindingParser.parse_usd_file(usd_file)
+            bindings = USDBindingParser.parse_usd_file_new(usd_file, self.config_manager)
             print(f"[alash.bindingsapi] Found {len(bindings)} bindings in {usd_file}")
             for binding in bindings:
                 self.bindings.append(binding)
-                success = self.mqtt_reader.add_binding(binding)
-                print(f"[alash.bindingsapi] Added binding: {binding.display_name} -> {binding.topic} (success: {success})")
-                print(f"[alash.bindingsapi] Binding details: protocol={binding.protocol}, broker={binding.broker}, topic={binding.topic}, json_path={binding.json_path}")
+                if binding.is_mqtt_event():
+                    success = self.mqtt_reader.add_binding(binding)
+                    print(f"[alash.bindingsapi] Added MQTT binding: {binding.display_name} -> {binding.topic} (success: {success})")
+                elif binding.is_http_request():
+                    success = self.http_poller.add_binding(binding)
+                    print(f"[alash.bindingsapi] Added HTTP request binding: {binding.display_name} -> {binding.get_host()}{binding.topic} (success: {success})")
+                print(f"[alash.bindingsapi] Binding details: type={binding.binding_type}, protocol={binding.get_protocol()}")
                 print(f"[alash.bindingsapi] USD refs: stage={binding.usd_stage is not None}, attr={binding.usd_attribute is not None}")
         
         print(f"[alash.bindingsapi] Total bindings loaded: {len(self.bindings)}")
         if not self.bindings:
-            print("[alash.bindingsapi] No MQTT bindings found in USD files")
+            print("[alash.bindingsapi] No event or request bindings found in USD files")
 
     def _create_ui(self):
         """Create the UI based on discovered bindings."""
         self._window = ui.Window(
-            "MQTT Data Monitor", width=500, height=300
+            "Event & Request Data Monitor", width=600, height=500
         )
         
         with self._window.frame:
             with ui.VStack(spacing=10):
-                ui.Label("MQTT Data Monitor", style={"font_size": 18})
+                ui.Label("Event & Request Data Monitor", style={"font_size": 18})
                 ui.Separator()
                 
                 # Connection status
@@ -568,9 +840,10 @@ class MyExtension(omni.ext.IExt):
                 
                 # Connect/Disconnect buttons
                 with ui.HStack():
-                    self.connect_btn = ui.Button("Connect to MQTT", clicked_fn=self._connect_mqtt)
-                    self.disconnect_btn = ui.Button("Disconnect", clicked_fn=self._disconnect_mqtt, enabled=False)
-                    ui.Button("Refresh USD", clicked_fn=self._refresh_bindings)
+                    self.connect_btn = ui.Button("Connect MQTT", clicked_fn=self._connect_mqtt)
+                    self.disconnect_btn = ui.Button("Disconnect MQTT", clicked_fn=self._disconnect_mqtt, enabled=False)
+                    ui.Button("Poll All HTTP", clicked_fn=self._poll_all_http)
+                    ui.Button("Refresh Bindings", clicked_fn=self._refresh_bindings)
 
     def _connect_mqtt(self):
         """Connect to MQTT broker."""
@@ -666,3 +939,125 @@ class MyExtension(omni.ext.IExt):
         print("[alash.bindingsapi] Extension shutdown")
         if hasattr(self, 'mqtt_reader'):
             self.mqtt_reader.disconnect()
+        if hasattr(self, 'http_poller'):
+            self.http_poller.stop_all_polling()
+        if hasattr(self, '_window') and self._window:
+            self._window.destroy()
+            self._window = None
+    
+    def _poll_all_http(self):
+        """Manually trigger polling for all HTTP bindings."""
+        http_bindings = [b for b in self.bindings if b.is_http_request()]
+        if not http_bindings:
+            print("[alash.bindingsapi] No HTTP bindings found")
+            return
+        
+        print(f"[alash.bindingsapi] Manually polling {len(http_bindings)} HTTP bindings")
+        
+        for binding in http_bindings:
+            self._poll_http_binding(binding)
+    
+    def _poll_http_binding(self, binding):
+        """Manually poll a specific HTTP binding."""
+        if requests is None:
+            print("[alash.bindingsapi] requests library not available")
+            return
+        
+        try:
+            # Build the full URL
+            base_url = binding.get_host()
+            endpoint = binding.endpoint_target
+            full_url = f"{base_url}{endpoint}"
+            
+            # Get auth info
+            auth_info = binding.get_auth_info()
+            headers = {}
+            auth = None
+            
+            # Set up authentication
+            if auth_info.get('auth_method') == 'api_key' and auth_info.get('api_key'):
+                headers['Authorization'] = f"Bearer {auth_info['api_key']}"
+            elif auth_info.get('username') and auth_info.get('password'):
+                auth = (auth_info['username'], auth_info['password'])
+            
+            # Make the HTTP request
+            timeout = binding.connection_config.get('timeout', 30) if binding.connection_config else 30
+            
+            print(f"[alash.bindingsapi] Manual poll: {full_url}")
+            response = requests.get(full_url, headers=headers, auth=auth, timeout=timeout)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Extract value using filter expression
+                value = self._extract_value_from_json(data, binding.filter_expression)
+                
+                if value is not None:
+                    print(f"[alash.bindingsapi] Manual HTTP poll result {binding.display_name}: {value}")
+                    
+                    # Update USD attribute
+                    binding.update_usd_value(value)
+                    
+                    # Update UI
+                    self._on_value_update(binding.display_name, value, time.strftime("%H:%M:%S"))
+                else:
+                    print(f"[alash.bindingsapi] Could not extract value using {binding.filter_expression}")
+            else:
+                print(f"[alash.bindingsapi] HTTP request failed: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            print(f"[alash.bindingsapi] Error in manual HTTP poll for {binding.display_name}: {e}")
+    
+    def _extract_value_from_json(self, data, json_path):
+        """Extract value from JSON data using JSONPath."""
+        if not json_path:
+            return data
+            
+        try:
+            # Try advanced JSONPath first
+            if jsonpath_parse:
+                parsed_path = jsonpath_parse(json_path)
+                matches = parsed_path.find(data)
+                if matches:
+                    return matches[0].value
+            else:
+                # Fallback to basic JSONPath for simple cases
+                if json_path.startswith('$.'):
+                    path_parts = json_path[2:].split('.')
+                    current = data
+                    for part in path_parts:
+                        if isinstance(current, dict) and part in current:
+                            current = current[part]
+                        else:
+                            return None
+                    return current
+        except Exception as e:
+            print(f"[alash.bindingsapi] Error extracting value with JSONPath {json_path}: {e}")
+            
+        return None
+    
+    def _update_all_usd(self):
+        """Update all USD attributes with current values."""
+        updated_count = 0
+        for binding in self.bindings:
+            # Get current value from either MQTT or HTTP storage
+            binding_id = binding.display_name
+            current_value = None
+            
+            if binding.is_mqtt_event() and hasattr(self.mqtt_reader, 'values'):
+                current_value = self.mqtt_reader.values.get(binding_id)
+            elif binding.is_http_request() and hasattr(self.http_poller, 'values'):
+                current_value = self.http_poller.values.get(binding_id)
+            
+            if current_value is not None:
+                success = binding.update_usd_value(current_value)
+                if success:
+                    updated_count += 1
+        
+        print(f"[alash.bindingsapi] Updated {updated_count} USD attributes")
+    
+    def _stop_http_polling(self):
+        """Stop all HTTP polling threads."""
+        if hasattr(self, 'http_poller'):
+            self.http_poller.stop_all_polling()
+            print("[alash.bindingsapi] Stopped all HTTP polling threads")
