@@ -115,12 +115,9 @@ class EventBindingConfiguration:
         # Extract binding-specific settings
         self.endpoint_target = self.binding_config.get('endpointTarget', '')
         self.filter_expression = self.binding_config.get('filterExpression', '')
-        self.device_match_field = self.binding_config.get('deviceMatchField', '')
-        self.device_match_value = self.binding_config.get('deviceMatchValue', '')
         self.reliability = self.binding_config.get('reliability', 1)
         self.payload_format = self.binding_config.get('payloadFormat', 'JSON')
         self.schema = self.binding_config.get('schema', '')
-        self.unit = self.binding_config.get('unit', '')
         self.description = self.binding_config.get('description', '')
         self.enabled = self.binding_config.get('enabled', True)
         

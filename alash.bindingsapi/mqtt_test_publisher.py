@@ -33,7 +33,6 @@ def create_temperature_message(temperature):
         "data": {
             "deviceId": "aircon3245",
             "temperature": temperature,
-            "unit": "celsius",
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
         }
     }
@@ -45,8 +44,7 @@ def create_temperature_message(temperature):
 #         "sensor_type": "humidity",
 #         "device_id": "sensor001",
 #         "measurements": {
-#             "humidity": humidity,
-#             "unit": "percent"
+#             "humidity": humidity
 #         },
 #         "timestamp": int(time.time())
 #     }
@@ -56,7 +54,6 @@ def create_temperature_message(temperature):
 #     """Create a simple pressure reading."""
 #     return {
 #         "pressure": pressure,
-#         "unit": "hPa",
 #         "location": "room_a"
 #     }
 
@@ -67,7 +64,7 @@ def main():
     port = 1883
     
     topics_and_generators = [
-        ("cloudevents/temperature", create_temperature_message, lambda: 22.0 + random.uniform(-1.0, 3.0)),
+        ("devices/aircon3245/temperature", create_temperature_message, lambda: 22.0 + random.uniform(-1.0, 3.0)),
         # ("sensors/humidity", create_humidity_message, lambda: 45.0 + random.uniform(-10.0, 20.0)),
         # ("environment/pressure", create_pressure_message, lambda: 1013.25 + random.uniform(-20.0, 20.0))
     ]

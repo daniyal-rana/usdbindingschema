@@ -70,10 +70,6 @@ class "MQTTBindingAPI" (
     )
     
     # Basic metadata
-    uniform string mqtt:unit = "" (
-        doc = """Unit of measurement (e.g., 'celsius', 'percent', 'meters')."""
-    )
-    
     uniform string mqtt:description = "" (
         doc = """Human-readable description of this MQTT binding."""
     )

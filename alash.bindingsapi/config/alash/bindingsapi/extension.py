@@ -122,7 +122,6 @@ class BindingConfiguration:
             self.broker = self._get_value(mqtt_dict, ['broker'], 'localhost:1883')
             self.topic = self._get_value(mqtt_dict, ['topic'], '')
             self.json_path = self._get_value(mqtt_dict, ['jsonPath'], '')
-            self.unit = self._get_value(mqtt_dict, ['unit'], '')
             self.description = self._get_value(mqtt_dict, ['description'], '')
             self.qos = self._get_int_value(mqtt_dict, ['qos'], 0)
             self.enabled = self._get_bool_value(mqtt_dict, ['enabled'], True)
@@ -135,7 +134,6 @@ class BindingConfiguration:
             self.broker = self._parse_mqtt_uri(self._get_value(binding_dict, ['uri'], ''))
             self.topic = self._get_value(binding_dict, ['topic'], '')
             self.json_path = self._get_value(binding_dict, ['jsonPath'], '')
-            self.unit = self._get_value(binding_dict, ['unit'], '')
             self.description = self._get_value(binding_dict, ['description'], '')
             self.qos = self._get_int_value(binding_dict, ['qos'], 0)
             self.enabled = self._get_bool_value(binding_dict, ['enabled'], True)
@@ -147,7 +145,6 @@ class BindingConfiguration:
             self.broker = self._parse_mqtt_uri(self._get_value(config, ['binding_uri', 'bindingUri', 'uri']))
             self.topic = self._get_value(config, ['binding_topic', 'bindingTopic', 'topic'])
             self.json_path = self._get_value(config, ['binding_jsonPath', 'bindingJsonPath', 'jsonPath'])
-            self.unit = ''
             self.description = ''
             self.qos = 0
             self.enabled = True
@@ -476,12 +473,7 @@ class GenericMQTTReader:
                 binding_id = binding.display_name
                 
                 try:
-                    # Check device matching for CloudEvents
-                    if binding.device_match_field and binding.device_match_value:
-                        device_field_value = self._extract_value(data, f"$.{binding.device_match_field}")
-                        if device_field_value != binding.device_match_value:
-                            continue  # Skip this binding if device doesn't match
-                    
+                    # With topic-based routing, no device matching needed
                     value = self._extract_value(data, binding.filter_expression)
                     if value is not None:
                         # Store value for UI updates
@@ -637,8 +629,6 @@ class USDBindingParser:
                             print(f"[alash.bindingsapi] ✓ Added MQTT binding: {binding_config.display_name}")
                             if binding_config.description:
                                 print(f"[alash.bindingsapi]   Description: {binding_config.description}")
-                            if binding_config.unit:
-                                print(f"[alash.bindingsapi]   Unit: {binding_config.unit}")
                         else:
                             print(f"[alash.bindingsapi] ✗ Not enabled MQTT binding: {binding_config.protocol} (enabled: {binding_config.enabled})")
                             
@@ -810,8 +800,6 @@ class MyExtension(omni.ext.IExt):
                                         ui.Label(f"Topic: {binding.topic}", style={"font_size": 12})
                                         ui.Label(f"JSONPath: {binding.json_path}", style={"font_size": 12})
                                         ui.Label(f"Broker: {binding.broker}", style={"font_size": 12})
-                                        if binding.unit:
-                                            ui.Label(f"Unit: {binding.unit}", style={"font_size": 12})
                                         if binding.description:
                                             ui.Label(f"Description: {binding.description}", style={"font_size": 11, "color": 0xAAAAAAA})
                                         ui.Separator()

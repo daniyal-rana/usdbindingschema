@@ -15,12 +15,10 @@ def Scope "HelloWorldAirCon"
                     string configFile = "usd_config/connections.toml"
                     
                     # Namespace
-                    string endpointTarget = "cloudevents/temperature"
+                    string endpointTarget = "devices/aircon3245/temperature"
                     
                     # Filtering
                     string filterExpression = "$.data.temperature.Value"
-                    string deviceMatchField = "subject"
-                    string deviceMatchValue = "aircon3245"
                     
                     # Delivery
                     int reliability = 1  # QoS 1
@@ -30,7 +28,6 @@ def Scope "HelloWorldAirCon"
                     string schema = ""
                     
                     # Metadata
-                    string unit = "celsius"
                     string description = "Air conditioner temperature from OPC UA PubSub via MQTT"
                     bool enabled = true
                 }

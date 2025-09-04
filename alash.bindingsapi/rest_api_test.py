@@ -127,7 +127,6 @@ def get_device_temperature(device_id):
     return jsonify({
         "device_id": device_id,
         "temperature": devices[device_id]["temperature"],
-        "unit": "celsius",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
     })
 
