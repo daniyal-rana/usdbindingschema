@@ -8,6 +8,15 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
+import sys
+import os
+
+# Ensure parent module is in sys.modules for proper reloading
+if 'alash' not in sys.modules:
+    import types
+    sys.modules['alash'] = types.ModuleType('alash')
+    sys.modules['alash'].__path__ = []
+
 import omni.ext
 import omni.ui as ui
 import omni.usd
@@ -16,8 +25,6 @@ import json
 import threading
 import time
 import re
-import sys
-import os
 from pxr import Usd, UsdGeom
 import omni.kit.pipapi
 
@@ -460,9 +467,11 @@ class GenericMQTTReader:
             
     def on_message(self, client, userdata, msg):
         """Called when a message is received."""
+        print('on_message called ', msg.topic, msg.payload)
         try:
             topic = msg.topic
             if topic not in self.bindings:
+                print(f'topic {topic} not in bindings {self.bindings}')
                 return
                 
             # Parse the JSON message
@@ -474,7 +483,9 @@ class GenericMQTTReader:
                 
                 try:
                     # With topic-based routing, no device matching needed
+                    print(f'extracting value from {data} using {binding.filter_expression}')
                     value = self._extract_value(data, binding.filter_expression)
+                    print(f'extracted value {value}')
                     if value is not None:
                         # Store value for UI updates
                         self.values[binding_id] = value
@@ -482,8 +493,12 @@ class GenericMQTTReader:
                         
                         print(f"[alash.bindingsapi] Received {binding_id}: {value}")
                         
-                        # Update USD attribute
-                        binding.update_usd_value(value)
+                        # USD updates MUST happen on main thread - schedule it
+                        async def update_on_main_thread():
+                            binding.update_usd_value(value)
+                            print(f'updated USD attribute {binding_id} = {value}')
+                        
+                        asyncio.ensure_future(update_on_main_thread())
                         
                         # Notify callbacks
                         for callback in self.callbacks:
@@ -522,7 +537,7 @@ class GenericMQTTReader:
             
         return None
             
-    def connect(self, broker_override=None):
+    def connect(self, broker_override='localhost'):
         """Connect to MQTT broker using configuration from bindings."""
         if mqtt is None:
             print("[alash.bindingsapi] MQTT not available")

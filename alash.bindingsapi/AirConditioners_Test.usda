@@ -1,9 +1,16 @@
 #usda 1.0
+(
+    defaultPrim = "HelloWorldAirCon"
+)
 
 def Scope "HelloWorldAirCon"
 {
     def Cube "AirConditioner_001"
     {
+        double size = 100
+        float3 xformOp:translate = (0, 50, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        
         string deviceName = "aircon3245"
 
         # EVENT Binding
@@ -18,7 +25,7 @@ def Scope "HelloWorldAirCon"
                     string endpointTarget = "devices/aircon3245/temperature"
                     
                     # Filtering
-                    string filterExpression = "$.data.temperature.Value"
+                    string filterExpression = "$.data.temperature"
                     
                     # Delivery
                     int reliability = 1  # QoS 1
